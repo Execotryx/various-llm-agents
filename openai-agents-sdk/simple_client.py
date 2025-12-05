@@ -1,6 +1,5 @@
 from openai import OpenAI
 from openai.types.responses import Response
-from openai.types import Reasoning
 from ai_config import AIConfig
 
 class SimpleClient:
