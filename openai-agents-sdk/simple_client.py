@@ -1,5 +1,6 @@
 from openai import OpenAI
 from openai.types.responses import Response
+from openai.types import Reasoning
 from ai_config import AIConfig
 
 class SimpleClient:
@@ -22,6 +23,9 @@ class SimpleClient:
         self.__last_response_id: str | None = None
 
     def ask(self, prompt: str) -> str:
+        if not prompt:
+            raise ValueError("Prompt cannot be empty.")
+
         if self._last_response_id is None:
             response: Response = self._client.responses.create(
                 model=self._config.model_name,
