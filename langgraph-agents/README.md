@@ -1,6 +1,6 @@
 # Local Ollama tweet generator
 
-This project generates and iteratively refines tweets with a locally hosted Ollama model. It uses LangChain's `ChatOllama`, prompt templates, and runnable composition. Although LangGraph is installed, the current implementation does not yet build a LangGraph graph.
+This project generates and iteratively refines tweets with a locally hosted Ollama model. It uses LangChain's `ChatOllama` and prompt templates inside a LangGraph `StateGraph` reflection workflow.
 
 ## Requirements
 
@@ -46,20 +46,36 @@ The built-in example requests a tweet about local AI and prints the final reflec
 
 ## Reflection workflow
 
-Each generator call performs three sequential Ollama requests:
+Each generator call follows a compact, bounded LangGraph reflection loop:
 
-1. Generate a draft from the request and existing conversation history.
-2. Review the draft with a separate reflection prompt and produce actionable criticism.
-3. Generate a revised tweet from the draft and criticism.
+1. `generate_draft` produces one draft from the bounded conversation history and current request.
+2. `reflect` critiques only the current request and latest draft.
+3. `revise` replaces the draft using only the latest critique.
+4. The reflect/revise pair repeats for the configured number of rounds.
 
-The draft and critique remain internal. Only the original request and successful final revision are added to conversation history. If any model call fails, that attempt is not committed. This workflow improves the opportunity for revision but has higher latency than a single model call.
+```text
+START -> generate_draft -> conditional -> END
+                            |
+                            `-> reflect -> revise -> conditional -> END
+                                             ^             |
+                                             `-------------`
+```
+
+The workflow makes exactly `1 + (2 * reflection_rounds)` model calls. The default of one reflection round therefore makes three calls instead of the previous eleven-call workflow. Draft and critique fields are replaced on each pass, so intermediate prompts do not grow with the number of rounds.
+
+Only complete successful request/response pairs are committed to bounded session history. A failed generation, reflection, or revision leaves history unchanged. Runtime components are shared for up to eight matching model, URL, and temperature configurations; session history remains isolated per generator. Shared invocation is serialized for compatibility with runtime versions that do not guarantee concurrent model-client safety.
 
 ## Use from Python
 
 ```python
-from tweet_generator.tweet_generator import TweetGenerator
+from tweet_generator.tweet_generator import TweetGenerator, TweetGeneratorSettings
 
-generator = TweetGenerator()
+settings = TweetGeneratorSettings(
+    reflection_rounds=1,
+    max_history_turns=4,
+    temperature=0.7,
+)
+generator = TweetGenerator(settings=settings)
 
 first_tweet = generator("Write a tweet about local AI")
 revised_tweet = generator("Make it shorter and more direct")
@@ -68,7 +84,7 @@ print(first_tweet)
 print(revised_tweet)
 ```
 
-A generator instance retains each successful request and final reflected response. Reusing the same instance lets feedback refer to previous results. Create a new instance to begin with empty conversation history.
+A generator instance retains up to `max_history_turns` successful request/final-response pairs. Reusing the same instance lets feedback refer to previous results. Use `0` to disable retained history or create a new instance to begin a separate session. Reflection rounds must be a non-negative integer; history size must be a non-negative integer; temperature must be finite and non-negative.
 
 You can also supply configuration explicitly:
 
@@ -95,7 +111,7 @@ langgraph-agents/
 
 - `tweet_generator/ollama_ai_config.py` loads and validates the model name and Ollama server URL.
 - The root `ollama_ai_config.py` preserves existing imports without duplicating the implementation.
-- `tweet_generator/tweet_generator.py` builds generation and reflection chains, runs draft/critique/revision passes, maintains final conversation history, and provides callable and script interfaces.
+- `tweet_generator/tweet_generator.py` builds cached generation/reflection/revision runtimes, compiles the compact `StateGraph`, maintains bounded transactional session history, and provides callable and script interfaces.
 
 ## Validation
 
@@ -103,6 +119,12 @@ Run Pyright against all project-owned Python files:
 
 ```powershell
 uv run pyright ollama_ai_config.py tweet_generator/ollama_ai_config.py tweet_generator/tweet_generator.py tweet_generator/__init__.py
+```
+
+Run deterministic standard-library tests without contacting Ollama:
+
+```powershell
+uv run python -m unittest discover -s tests -v
 ```
 
 Validate imports without making an Ollama request:

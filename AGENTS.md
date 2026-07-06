@@ -29,16 +29,22 @@ Do not assume both example areas share a virtual environment or dependency manif
 - `OLLAMA_MODEL_NAME` defaults to `lfm2.5-thinking:1.2b-q8_0`.
 - `OLLAMA_BASE_URL` defaults to `http://localhost:11434`.
 - The configured model must already be available to the target Ollama server.
-- The current tweet generator uses a LangChain prompt/model runnable with `ChatOllama`; it does not yet construct a LangGraph graph.
+- The tweet generator compiles a LangGraph `StateGraph` with explicit replacement state around LangChain generation, reflection, and revision runnables.
 
 ## Tweet generator behavior
 
 - Keep the generator in the importable `langgraph-agents/tweet_generator` package.
-- `TweetGenerator` instances retain successful user and assistant messages, allowing later calls to refine previous tweets.
-- Each call generates a draft, critiques it with the reflection chain, and generates a final revision.
+- `TweetGeneratorSettings` controls reflection rounds, bounded history, and model temperature. Keep its defaults at one round, four history turns, and `0.7` unless requirements change.
+- `TweetGenerator` instances retain a bounded deque of complete successful request/response turns. Never retain half a turn or mutate history after a failed call.
+- Keep the graph topology as `START -> generate_draft -> conditional(reflect | END)`, then `reflect -> revise -> conditional(reflect | END)` unless workflow requirements change.
+- A call must make exactly `1 + (2 * reflection_rounds)` model requests.
+- Keep history, current request, current draft, latest critique, and reflection counters in explicit graph fields. Drafts and critiques replace their fields rather than accumulating messages.
+- Reflection receives only the current request and latest draft. Revision receives only the current request, latest draft, and latest critique. Do not restore role reversal.
+- StateGraph nodes must accept `TweetState` and return partial state updates.
 - Reflection is internal: commit only the original request and final revision to conversation history.
-- A successful call makes three sequential Ollama requests, which affects latency.
+- The default single reflection round makes three sequential Ollama requests.
 - Failed model calls must not be committed to conversation history.
+- Runtime components are cached for up to eight model name, base URL, and temperature combinations, but conversation history remains per generator instance. Shared runtime invocation is serialized as a conservative compatibility fallback for clients without concurrency guarantees.
 - The configured Ollama model and base URL must both be passed to `ChatOllama`.
 - Keep both supported launch modes functional from `langgraph-agents/`:
 
@@ -63,6 +69,7 @@ Run LangGraph checks from `langgraph-agents/`:
 ```powershell
 uv sync
 uv run pyright ollama_ai_config.py tweet_generator/ollama_ai_config.py tweet_generator/tweet_generator.py tweet_generator/__init__.py
+uv run python -m unittest discover -s tests -v
 uv run python -c "from tweet_generator.tweet_generator import TweetGenerator; assert TweetGenerator is not None"
 ```
 
