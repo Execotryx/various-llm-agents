@@ -18,6 +18,7 @@ Do not assume both example areas share a virtual environment or dependency manif
 - `OPENAI_MODEL_NAME` is optional and defaults to `gpt-5-nano`.
 - `SimpleClient` retains the last Responses API response ID for follow-up prompts.
 - `BusinessIdeaInvestigator` performs a two-step investigation using the Responses API.
+- Its system prompt is stored under `openai-agents-sdk/prompts/`; keep system prompts out of Python source.
 - Run scripts from `openai-agents-sdk/` so their local `ai_config` import resolves.
 
 ## LangGraph/Ollama project
@@ -25,6 +26,7 @@ Do not assume both example areas share a virtual environment or dependency manif
 - Manage dependencies from `langgraph-agents/` with uv and the checked-in `uv.lock`.
 - Python 3.13 or newer is required by `langgraph-agents/pyproject.toml`.
 - `langgraph-agents/tweet_generator/ollama_ai_config.py` is the canonical configuration and loads settings from the repository-level `.env` file.
+- Tweet workflow system prompts are Markdown files under `langgraph-agents/tweet_generator/prompts/`; keep them external to Python source.
 - `langgraph-agents/ollama_ai_config.py` is a compatibility re-export for existing imports.
 - `OLLAMA_MODEL_NAME` defaults to `lfm2.5-thinking:1.2b-q8_0`.
 - `OLLAMA_BASE_URL` defaults to `http://localhost:11434`.

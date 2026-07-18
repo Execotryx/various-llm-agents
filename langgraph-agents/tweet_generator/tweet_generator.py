@@ -4,6 +4,7 @@ from collections import OrderedDict, deque
 from dataclasses import dataclass
 from math import isfinite
 from numbers import Real
+from pathlib import Path
 from threading import RLock
 from typing import Any, TypedDict
 
@@ -90,6 +91,11 @@ class _TweetRuntime:
 _RUNTIME_CACHE_MAX_SIZE = 8
 _RUNTIME_CACHE: OrderedDict[_RuntimeKey, _TweetRuntime] = OrderedDict()
 _RUNTIME_CACHE_LOCK = RLock()
+_PROMPTS_DIRECTORY = Path(__file__).with_name("prompts")
+
+
+def _load_system_prompt(filename: str) -> str:
+    return (_PROMPTS_DIRECTORY / filename).read_text(encoding="utf-8").strip()
 
 
 def _create_llm(key: _RuntimeKey) -> ChatOllama:
@@ -120,14 +126,7 @@ def _build_runtime(key: _RuntimeKey) -> _TweetRuntime:
         [
             (
                 "system",
-                "# Role\n"
-                "You are a Twitter expert assigned to create outstanding tweets.\n\n"
-                "# Task\n"
-                "Generate the most engaging and impactful tweet possible, based on "
-                "the user request.\n"
-                "If the user provides feedback, refine and enhance your previous "
-                "attempts accordingly for maximum engagement.\n"
-                "Respond only with a created tweet, nothing more.",
+                _load_system_prompt("generate-system.md"),
             ),
             MessagesPlaceholder(variable_name="messages"),
         ]
@@ -136,13 +135,7 @@ def _build_runtime(key: _RuntimeKey) -> _TweetRuntime:
         [
             (
                 "system",
-                "# Role\n"
-                "You are a Twitter influencer known for engaging content and sharp "
-                "insights.\n\n"
-                "# Task\n"
-                "Review the draft against the original request. Provide specific, "
-                "constructive suggestions that improve its depth, style, clarity, "
-                "and impact. Respond only with a bulleted list of critique.",
+                _load_system_prompt("reflect-system.md"),
             ),
             (
                 "human",
@@ -155,8 +148,7 @@ def _build_runtime(key: _RuntimeKey) -> _TweetRuntime:
         [
             (
                 "system",
-                "You are a Twitter expert. Revise the draft using the critique while "
-                "preserving the original request. Respond only with the revised tweet.",
+                _load_system_prompt("revise-system.md"),
             ),
             (
                 "human",
