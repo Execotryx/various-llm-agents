@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from openai import OpenAI
 from openai.types.responses import Response
 from ai_config import AIConfig
@@ -23,9 +25,9 @@ class BusinessIdeaInvestigator:
     def __init__(self):
         self.__config: AIConfig = AIConfig()
         self.__client: OpenAI = OpenAI(api_key=self._config.api_key)
-        self.__system_behavior: str = (
-            "You are a business idea investigator. Your task is to analyze and provide insights on business ideas presented to you."
-        )
+        self.__system_behavior = (
+            Path(__file__).with_name("prompts") / "business-idea-investigator-system.md"
+        ).read_text(encoding="utf-8").strip()
         self.__last_response_id: str | None = None
 
     def ask_starting_question(self, question: str) -> Response:
